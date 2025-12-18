@@ -4,55 +4,8 @@ const fs = require('fs');
 const path = require('path');
 const { execSync } = require('child_process');
 
-// 设置日志文件（放在public目录下）
-const LOG_DIR = path.join(__dirname, 'public', 'logs');
-const LOG_FILE = path.join(LOG_DIR, `app_${new Date().toISOString().split('T')[0]}.log`);
-
-// 重定向console的输出到自定义日志函数
-const originalConsoleLog = console.log;
-const originalConsoleError = console.error;
-
-// 确保日志目录存在
-if (!fs.existsSync(LOG_DIR)) {
-  fs.mkdirSync(LOG_DIR, { recursive: true });
-}
-
-// 创建日志文件写入流
-const logStream = fs.createWriteStream(LOG_FILE, { flags: 'a' });
-
-// 重写console.log和console.error方法
-console.log = (...args) => {
-  const timestamp = new Date().toISOString();
-  const message = args.map(arg => typeof arg === 'object' ? JSON.stringify(arg) : arg).join(' ');
-  const logMessage = `[${timestamp}] [INFO] ${message}`;
-  
-  // 使用原始console.log输出到控制台
-  originalConsoleLog(logMessage);
-  
-  // 写入日志文件
-  logStream.write(logMessage + '\n');
-};
-
-console.error = (...args) => {
-  const timestamp = new Date().toISOString();
-  const message = args.map(arg => typeof arg === 'object' ? JSON.stringify(arg) : arg).join(' ');
-  const logMessage = `[${timestamp}] [ERROR] ${message}`;
-  
-  // 使用原始console.error输出到控制台
-  originalConsoleError(logMessage);
-  
-  // 写入日志文件
-  logStream.write(logMessage + '\n');
-};
-
-// 在程序退出时关闭日志流
-process.on('exit', () => {
-  logStream.end();
-});
-
 process.on('uncaughtException', (err) => {
   console.error(`未捕获的异常: ${err.message}\n${err.stack}`);
-  logStream.end();
   process.exit(1);
 });
 
