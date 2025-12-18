@@ -4,6 +4,62 @@ const fs = require('fs');
 const path = require('path');
 const { execSync } = require('child_process');
 
+// 设置日志文件（放在public目录下）
+const LOG_DIR = path.join(__dirname, 'public', 'logs');
+const LOG_FILE = path.join(LOG_DIR, `app_${new Date().toISOString().split('T')[0]}.log`);
+
+// 重定向console的输出到自定义日志函数
+const originalConsoleLog = console.log;
+const originalConsoleError = console.error;
+
+// 确保日志目录存在
+if (!fs.existsSync(LOG_DIR)) {
+  fs.mkdirSync(LOG_DIR, { recursive: true });
+}
+
+// 创建日志文件写入流
+const logStream = fs.createWriteStream(LOG_FILE, { flags: 'a' });
+
+// 重写console.log和console.error方法
+console.log = (...args) => {
+  const timestamp = new Date().toISOString();
+  const message = args.map(arg => typeof arg === 'object' ? JSON.stringify(arg) : arg).join(' ');
+  const logMessage = `[${timestamp}] [INFO] ${message}`;
+  
+  // 使用原始console.log输出到控制台
+  originalConsoleLog(logMessage);
+  
+  // 写入日志文件
+  logStream.write(logMessage + '\n');
+};
+
+console.error = (...args) => {
+  const timestamp = new Date().toISOString();
+  const message = args.map(arg => typeof arg === 'object' ? JSON.stringify(arg) : arg).join(' ');
+  const logMessage = `[${timestamp}] [ERROR] ${message}`;
+  
+  // 使用原始console.error输出到控制台
+  originalConsoleError(logMessage);
+  
+  // 写入日志文件
+  logStream.write(logMessage + '\n');
+};
+
+// 在程序退出时关闭日志流
+process.on('exit', () => {
+  logStream.end();
+});
+
+process.on('uncaughtException', (err) => {
+  console.error(`未捕获的异常: ${err.message}\n${err.stack}`);
+  logStream.end();
+  process.exit(1);
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+  console.error(`未处理的Promise拒绝: ${reason}`);
+});
+
 const PORT = 8000;
 const PUBLIC_DIR = path.join(__dirname, 'public');
 
@@ -24,11 +80,44 @@ try {
 if (hasContent) {
   console.log('public文件夹中有内容，开始清理...');
   try {
-    // 使用命令行删除public文件夹中的所有内容（更可靠的方式处理嵌套目录）
-    execSync(`rm -rf "${PUBLIC_DIR}"/*`, { stdio: 'inherit' });
+    // 使用rsync命令清理public文件夹内容，排除logs目录
+    // 首先创建一个空目录作为源
+    const emptyDir = path.join(__dirname, 'empty_dir');
+    if (!fs.existsSync(emptyDir)) {
+      fs.mkdirSync(emptyDir);
+    }
+    
+    // 使用rsync同步空目录到public目录，排除logs目录
+    execSync(`rsync -av --delete --exclude='logs' "${emptyDir}/" "${PUBLIC_DIR}/"`, { stdio: 'inherit' });
+    
+    // 删除临时空目录
+    fs.rmdirSync(emptyDir);
+    
     console.log('public文件夹清理完成');
   } catch (error) {
     console.error('清理public文件夹失败:', error.message);
+    
+    // 如果rsync命令失败，尝试使用备选方法：移动logs目录后删除再移动回来
+    try {
+      const tempLogsDir = path.join(__dirname, 'temp_logs');
+      
+      // 如果logs目录存在，先移动到临时位置
+      if (fs.existsSync(LOG_DIR)) {
+        fs.renameSync(LOG_DIR, tempLogsDir);
+      }
+      
+      // 删除public目录下所有内容
+      execSync(`rm -rf "${PUBLIC_DIR}"/*`, { stdio: 'inherit' });
+      
+      // 如果有临时logs目录，移回public目录
+      if (fs.existsSync(tempLogsDir)) {
+        fs.renameSync(tempLogsDir, LOG_DIR);
+      }
+      
+      console.log('使用备选方法清理public文件夹完成');
+    } catch (error2) {
+      console.error('备选方法清理public文件夹也失败:', error2.message);
+    }
   }
 }
 
