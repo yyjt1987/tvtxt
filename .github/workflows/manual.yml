@@ -35,14 +35,16 @@ jobs:
           find public -type d -not -name "." -not -path "*/.*" -exec rm -rf {} \;
           
           # 复制TVBox内容到public目录
-          cp -r .tvbox-temp/* public/
+          cp -r .tvbox-temp/* ./public/
+          # 删除可能存在的.git目录（如果被复制过来了）
+          rm -rf ./public/.git
       
       - name: Commit and push changes
         run: |
           git config user.name "GitHub Actions"
           git config user.email "actions@github.com"
           
-          git add public/
+          git add ./public/
           
           # 检查是否有更改
           if git diff --staged --quiet; then
