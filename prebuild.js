@@ -93,11 +93,11 @@ function copyRepoToPublic(repoDir, publicDir) {
       } else {
         // 如果是文件，直接复制
         fs.copyFileSync(srcPath, destPath, fs.constants.COPYFILE_FICLONE);
-        console.log(`已复制文件: ${item.name}`);
+        console.log(`已复制文件: ${destPath}`);
       }
     });
     
-    console.log('已将仓库内容覆盖写入到public目录（已排除指定文件）');
+    console.log(`已将 ${repoDir} 目录内容覆盖写入到 ${publicDir} 目录（已排除指定文件）`);
   } catch (error) {
     console.error('复制文件错误详情:', error.message);
     throw new Error('复制文件到public目录失败');
